@@ -39,7 +39,7 @@ const Header = () => {
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center space-x-4">
+          <Link to="/" className="flex items-center space-x-4 hover:opacity-80 transition-opacity">
             <div className="bg-gradient-primary text-primary-foreground p-2 rounded-lg">
               <LayoutDashboard className="h-6 w-6" />
             </div>
@@ -47,7 +47,7 @@ const Header = () => {
               <h1 className="text-xl font-semibold text-foreground">ERPro</h1>
               <p className="text-xs text-muted-foreground">Enterprise Resource Planning</p>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-1">

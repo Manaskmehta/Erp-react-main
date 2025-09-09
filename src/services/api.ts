@@ -287,6 +287,64 @@ export interface ProductResponse {
   message?: string;
 }
 
+// Product Stock types
+
+export interface ProductStock {
+  id: number;
+  barcode: string;
+  product_id: number;
+  product_name: string;
+  particulars: string;
+  purchase_price: number;
+  quantity: number;
+  sales_price_per_piece: number;
+  total_sales_price: number;
+  created_at: string;
+}
+
+export interface ProductStockCreateRequest {
+  barcode: string;
+  product_id: number;
+  particulars: string;
+  purchase_price: number;
+  quantity: number;
+  sales_price_per_piece: number;
+  total_sales_price: number;
+}
+
+export interface ProductStockUpdateRequest {
+  quantity?: number;
+  sales_price_per_piece?: number;
+  total_sales_price?: number;
+  particulars?: string;
+}
+
+export interface ProductStockListResponse {
+  data: ProductStock[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+export interface DirectProductStockListResponse {
+  success: boolean;
+  data: ProductStock[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    limit: number;
+  };
+}
+
+export interface ProductStockResponse {
+  data: ProductStock;
+  message?: string;
+}
+
 // API Service class
 class ApiService {
   private getAuthHeaders(): HeadersInit {
@@ -642,6 +700,50 @@ class ApiService {
   async deleteProductPermanent(id: number): Promise<ApiResponse> {
     return this.request(`/api/product-master/${id}/permanent`, {
       method: 'DELETE',
+    });
+  }
+
+  // Get all products with category and GST details for stock management
+  async getAllProductDetails(): Promise<ApiResponse<any>> {
+    return this.request('/api/product-master/all-details');
+  }
+
+  // Product Stock methods
+  async getProductStocks(
+    search = '',
+    page = 1,
+    limit = 10
+  ): Promise<ApiResponse<DirectProductStockListResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(search && { search })
+    });
+    
+    return this.request(`/api/product-stocks?${params}`);
+  }
+
+  async getProductStockById(id: number): Promise<ApiResponse<ProductStockResponse>> {
+    return this.request(`/api/product-stocks/${id}`);
+  }
+
+  async createProductStock(stockData: ProductStockCreateRequest): Promise<ApiResponse<ProductStockResponse>> {
+    return this.request('/api/product-stocks', {
+      method: 'POST',
+      body: JSON.stringify(stockData)
+    });
+  }
+
+  async updateProductStock(id: number, stockData: ProductStockUpdateRequest): Promise<ApiResponse<ProductStockResponse>> {
+    return this.request(`/api/product-stocks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(stockData)
+    });
+  }
+
+  async deleteProductStock(id: number): Promise<ApiResponse> {
+    return this.request(`/api/product-stocks/${id}`, {
+      method: 'DELETE'
     });
   }
 }
