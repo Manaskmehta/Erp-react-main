@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { apiService, Customer } from "@/services/api";
+import { useNavigate } from "react-router-dom";
 import { 
   ShoppingCart, 
   Plus, 
@@ -16,11 +22,66 @@ import {
   Package,
   Eye,
   Edit,
-  Printer
+  Printer,
+  Loader2
 } from "lucide-react";
 
 const Sales = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [isNewSaleOpen, setIsNewSaleOpen] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [newSaleForm, setNewSaleForm] = useState({
+    customerId: '',
+    items: '',
+    amount: '',
+    paymentMethod: '',
+    notes: ''
+  });
+
+  // Fetch customers when dialog opens
+  useEffect(() => {
+    if (isNewSaleOpen && customers.length === 0) {
+      fetchCustomers();
+    }
+  }, [isNewSaleOpen]);
+
+  const fetchCustomers = async () => {
+    setIsLoadingCustomers(true);
+    try {
+      const response = await apiService.getAllCustomers();
+      if (response.data.success) {
+        setCustomers(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = customers.find(c => c.id.toString() === customerId);
+    setSelectedCustomer(customer || null);
+    setNewSaleForm(prev => ({ ...prev, customerId }));
+  };
+
+  const handleNewSaleSubmit = () => {
+    // Here you would typically submit the form to create a new sale
+    console.log('New sale data:', { ...newSaleForm, customer: selectedCustomer });
+    // Reset form and close dialog
+    setNewSaleForm({
+      customerId: '',
+      items: '',
+      amount: '',
+      paymentMethod: '',
+      notes: ''
+    });
+    setSelectedCustomer(null);
+    setIsNewSaleOpen(false);
+  };
 
   const salesData = [
     {
@@ -99,10 +160,139 @@ const Sales = () => {
               <Printer className="h-4 w-4 mr-2" />
               Print Report
             </Button>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Sale
-            </Button>
+            <Button variant="outline" onClick={() => navigate('/sales/invoice')}>
+               Create Invoice
+             </Button>
+            <Dialog open={isNewSaleOpen} onOpenChange={setIsNewSaleOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Sale
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New Sale</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6">
+                  {/* Customer Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="customer">Select Customer</Label>
+                    {isLoadingCustomers ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Loading customers...</span>
+                      </div>
+                    ) : (
+                      <Select value={newSaleForm.customerId} onValueChange={handleCustomerSelect}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a customer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customers.map((customer) => (
+                            <SelectItem key={customer.id} value={customer.id.toString()}>
+                              {customer.client_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  {/* Customer Details Display */}
+                  {selectedCustomer && (
+                    <Card className="p-4 bg-secondary/50">
+                      <h4 className="font-semibold mb-3">Customer Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Name:</span> {selectedCustomer.client_name}
+                        </div>
+                        <div>
+                          <span className="font-medium">Email:</span> {selectedCustomer.email}
+                        </div>
+                        <div>
+                          <span className="font-medium">Mobile:</span> {selectedCustomer.mobile_no}
+                        </div>
+                        <div>
+                          <span className="font-medium">PAN:</span> {selectedCustomer.pan_no}
+                        </div>
+                        <div>
+                          <span className="font-medium">GST:</span> {selectedCustomer.gst_no}
+                        </div>
+                        <div>
+                          <span className="font-medium">Aadhaar:</span> {selectedCustomer.aadhaar_number}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium">Address:</span> {selectedCustomer.address}, {selectedCustomer.city}, {selectedCustomer.state} - {selectedCustomer.pincode}, {selectedCustomer.country}
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Sale Details Form */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="items">Items</Label>
+                      <Input
+                        id="items"
+                        placeholder="Enter items"
+                        value={newSaleForm.items}
+                        onChange={(e) => setNewSaleForm(prev => ({ ...prev, items: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount (₹)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        placeholder="Enter amount"
+                        value={newSaleForm.amount}
+                        onChange={(e) => setNewSaleForm(prev => ({ ...prev, amount: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="payment">Payment Method</Label>
+                      <Select value={newSaleForm.paymentMethod} onValueChange={(value) => setNewSaleForm(prev => ({ ...prev, paymentMethod: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select payment method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                          <SelectItem value="upi">UPI</SelectItem>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes (Optional)</Label>
+                      <Textarea
+                        id="notes"
+                        placeholder="Add any notes"
+                        value={newSaleForm.notes}
+                        onChange={(e) => setNewSaleForm(prev => ({ ...prev, notes: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setIsNewSaleOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleNewSaleSubmit}
+                      disabled={!selectedCustomer || !newSaleForm.items || !newSaleForm.amount || !newSaleForm.paymentMethod}
+                    >
+                      Create Sale
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 

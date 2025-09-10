@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiService, Product, ProductCreateRequest, DirectProductListResponse, CategoryWithHSN, ProductStock, ProductStockCreateRequest, ProductStockUpdateRequest } from "@/services/api";
+import { apiService, Product, ProductCreateRequest, DirectProductListResponse, CategoryWithHSN, ProductStock, ProductStockCreateRequest, ProductStockUpdateRequest, BarcodeGenerationResponse } from "@/services/api";
 import { 
   Package, 
   Plus, 
@@ -72,6 +72,8 @@ const Stock = () => {
     hsn_no: "",
     gst_rate: ""
   });
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
 
   // Product Stock state management
   const [productStocks, setProductStocks] = useState<ProductStock[]>([]);
@@ -229,6 +231,8 @@ const fetchProductStocks = async () => {
       hsn_no: "",
       gst_rate: ""
     });
+    setBarcodeLoading(false);
+    setBarcodeError(null);
   };
 
   const calculateTotalSalesPrice = () => {
@@ -237,15 +241,38 @@ const fetchProductStocks = async () => {
     return (salesPrice * quantity).toFixed(2);
   };
 
-  const handleProductSelect = (productId: string) => {
+  const handleProductSelect = async (productId: string) => {
     const selectedProduct = allProducts.find(p => p.id.toString() === productId);
     if (selectedProduct) {
+      // Clear previous errors and set loading state
+      setBarcodeError(null);
+      setBarcodeLoading(true);
+      
       setAddStockForm(prev => ({
         ...prev,
         product_id: productId,
         hsn_no: selectedProduct.hsn_no || "",
-        gst_rate: selectedProduct.GST ? selectedProduct.GST.toString() : ""
+        gst_rate: selectedProduct.GST ? selectedProduct.GST.toString() : "",
+        barcode: "" // Reset barcode while loading
       }));
+
+      // Call barcode generation API
+      try {
+        const response = await apiService.generateBarcode(productId);
+        if (response.success && response.data) {
+          setAddStockForm(prev => ({
+            ...prev,
+            barcode: response.data.next_barcode
+          }));
+        } else {
+          setBarcodeError('Failed to generate barcode. Please enter manually.');
+        }
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+        setBarcodeError('Error generating barcode. Please enter manually.');
+      } finally {
+        setBarcodeLoading(false);
+      }
     }
   };
 
@@ -564,12 +591,21 @@ const fetchProductStocks = async () => {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="barcode">Barcode</Label>
-                            <Input
-                              id="barcode"
-                              value={addStockForm.barcode}
-                              onChange={(e) => setAddStockForm({...addStockForm, barcode: e.target.value})}
-                              placeholder="Enter barcode"
-                            />
+                            <div className="relative">
+                              <Input
+                                id="barcode"
+                                value={addStockForm.barcode}
+                                onChange={(e) => setAddStockForm({...addStockForm, barcode: e.target.value})}
+                                placeholder={barcodeLoading ? "Generating barcode..." : "Enter barcode"}
+                                disabled={barcodeLoading}
+                              />
+                              {barcodeLoading && (
+                                <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                              )}
+                            </div>
+                            {barcodeError && (
+                              <p className="text-sm text-destructive">{barcodeError}</p>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">

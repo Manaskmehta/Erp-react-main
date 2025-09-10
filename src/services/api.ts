@@ -345,6 +345,13 @@ export interface ProductStockResponse {
   message?: string;
 }
 
+// Barcode Generation types
+export interface BarcodeGenerationResponse {
+  product_id: string;
+  product_code: string;
+  next_barcode: string;
+}
+
 // API Service class
 class ApiService {
   private getAuthHeaders(): HeadersInit {
@@ -650,6 +657,10 @@ class ApiService {
     });
   }
 
+  async getAllCustomers(): Promise<ApiResponse<{ success: boolean; data: Customer[] }>> {
+    return this.request('/api/customer-master/all');
+  }
+
   // Product API methods
   async getProducts(
     search = '',
@@ -744,6 +755,13 @@ class ApiService {
   async deleteProductStock(id: number): Promise<ApiResponse> {
     return this.request(`/api/product-stocks/${id}`, {
       method: 'DELETE'
+    });
+  }
+
+  // Barcode Generation API
+  async generateBarcode(productId: string): Promise<ApiResponse<BarcodeGenerationResponse>> {
+    return this.request(`/api/product-stocks/generate-barcode/${productId}`, {
+      method: 'GET'
     });
   }
 }

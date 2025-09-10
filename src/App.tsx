@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Master from "./pages/Master";
 import Stock from "./pages/Stock";
 import Sales from "./pages/Sales";
+import SalesInvoice from "./pages/SalesInvoice";
 import Accounts from "./pages/Accounts";
 import Reports from "./pages/Reports";
 import Auth from "./pages/Auth";
@@ -47,6 +48,11 @@ const App = () => (
             <Route path="/sales" element={
               <ProtectedRoute>
                 <Sales />
+              </ProtectedRoute>
+            } />
+            <Route path="/sales/invoice" element={
+              <ProtectedRoute>
+                <SalesInvoice />
               </ProtectedRoute>
             } />
             <Route path="/accounts" element={
