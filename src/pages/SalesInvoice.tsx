@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { apiService, Customer } from "@/services/api";
+import { apiService, Customer, ProductBarcode } from "@/services/api";
 import { 
   ArrowLeft,
   Plus,
@@ -22,18 +22,16 @@ import { useNavigate } from "react-router-dom";
 
 interface InvoiceItem {
   id: string;
-  category: string;
   barcode: string;
-  hsn: string;
-  pieces: number;
-  grossWeight: number;
-  otherWeight: number;
-  netWeight: number;
-  purity: string;
-  rateOn: string;
+  product: string;
+  category: string;
+  hsnNumber: string;
+  quantity: number;
   rate: number;
-  labourOn: string;
-  labourRate: number;
+  subtotal: number;
+  gst: number;
+  gstAmount: number;
+  amount: number;
 }
 
 const SalesInvoice = () => {
@@ -41,6 +39,8 @@ const SalesInvoice = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [barcodes, setBarcodes] = useState<ProductBarcode[]>([]);
+  const [isLoadingBarcodes, setIsLoadingBarcodes] = useState(false);
   
   // Invoice form state
   const [invoiceForm, setInvoiceForm] = useState({
@@ -55,18 +55,16 @@ const SalesInvoice = () => {
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([
     {
       id: '1',
-      category: '',
       barcode: '',
-      hsn: '',
-      pieces: 0,
-      grossWeight: 0,
-      otherWeight: 0,
-      netWeight: 0,
-      purity: 'Net WT',
-      rateOn: 'Gross WT',
+      product: '',
+      category: '',
+      hsnNumber: '',
+      quantity: 0,
       rate: 0,
-      labourOn: 'Per Gram',
-      labourRate: 0
+      subtotal: 0,
+      gst: 18,
+      gstAmount: 0,
+      amount: 0
     }
   ]);
 
@@ -77,24 +75,38 @@ const SalesInvoice = () => {
     gst: 0
   });
 
-  // Fetch customers on component mount
+  // Fetch customers and barcodes on component mount
   useEffect(() => {
     fetchCustomers();
+    fetchBarcodes();
   }, []);
 
   const fetchCustomers = async () => {
     setIsLoadingCustomers(true);
     try {
       const response :any= await apiService.getAllCustomers();
-        console.log('Fetched customers:', response.data);
-
-      if (response.data.success === true) {
+       if (response.success === true) {
         setCustomers(response.data);  
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
     } finally {
       setIsLoadingCustomers(false);
+    }
+  };
+
+  const fetchBarcodes = async () => {
+    setIsLoadingBarcodes(true);
+    try {
+      const response :any = await apiService.getProductBarcodes();
+      console.log("JAKAJ",response.data)
+      if (response.success === true && response.data) {
+        setBarcodes(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching barcodes:', error);
+    } finally {
+      setIsLoadingBarcodes(false);
     }
   };
 
@@ -115,18 +127,16 @@ const SalesInvoice = () => {
   const addNewItem = () => {
     const newItem: InvoiceItem = {
       id: Date.now().toString(),
-      category: '',
       barcode: '',
-      hsn: '',
-      pieces: 0,
-      grossWeight: 0,
-      otherWeight: 0,
-      netWeight: 0,
-      purity: 'Net WT',
-      rateOn: 'Gross WT',
+      product: '',
+      category: '',
+      hsnNumber: '',
+      quantity: 0,
       rate: 0,
-      labourOn: 'Per Gram',
-      labourRate: 0
+      subtotal: 0,
+      gst: 18,
+      gstAmount: 0,
+      amount: 0
     };
     setInvoiceItems([...invoiceItems, newItem]);
   };
@@ -137,27 +147,37 @@ const SalesInvoice = () => {
     }
   };
 
-  const updateItem = (id: string, field: keyof InvoiceItem, value: any) => {
-    setInvoiceItems(invoiceItems.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
-  };
+
 
   const calculateTotals = () => {
     // Calculate totals based on items
     const amount = invoiceItems.reduce((sum, item) => {
-      return sum + (item.netWeight * item.rate);
+      return sum + item.amount;
     }, 0);
     
-    const labour = invoiceItems.reduce((sum, item) => {
-      return sum + (item.netWeight * item.labourRate);
+    const labour = 0; // No labour calculation needed
+    const gst = invoiceItems.reduce((sum, item) => {
+      return sum + item.gstAmount;
     }, 0);
-    
-    const subtotal = amount + labour;
-    const gst = subtotal * 0.03; // 3% GST
-    const hallmark = subtotal * 0.01; // 1% Hallmark
+    const hallmark = 0; // No hallmark calculation needed
     
     setTotals({ amount, labour, hallmark, gst });
+  };
+
+  const updateItemCalculations = (id: string, field: keyof InvoiceItem, value: any) => {
+    setInvoiceItems(invoiceItems.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, [field]: value };
+        
+        // Recalculate subtotal, gst amount, and total amount
+        updatedItem.subtotal = updatedItem.quantity * updatedItem.rate;
+        updatedItem.gstAmount = (updatedItem.subtotal * updatedItem.gst) / 100;
+        updatedItem.amount = updatedItem.subtotal + updatedItem.gstAmount;
+        
+        return updatedItem;
+      }
+      return item;
+    }));
   };
 
   useEffect(() => {
@@ -312,7 +332,42 @@ const SalesInvoice = () => {
 
 
             {/* Product Items */}
-            <Card className="overflow-visible">
+            
+          </div>
+
+          {/* Right Column - Totals and Summary */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Calculation Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Calculator className="h-5 w-5 mr-2" />
+                  Invoice Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal (₹):</span>
+                    <span className="font-medium">{(totals.amount - totals.gst).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">GST (₹):</span>
+                    <span className="font-medium">{totals.gst.toFixed(2)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total Amount:</span>
+                    <span>₹{totals.amount.toFixed(2)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+
+          </div>
+        </div>
+        <Card className="overflow-visible">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Product Items</CardTitle>
@@ -323,31 +378,61 @@ const SalesInvoice = () => {
                 </div>
               </CardHeader>
               <CardContent className="overflow-visible">
-                <div className="overflow-x-auto w-full overflow-y-visible">
-                  <table className="w-full min-w-[1400px] text-sm border-collapse">
+                <div className="w-full">
+                  <table className="w-full text-sm border-collapse table-fixed">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-medium min-w-[140px]">Billing Category</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Barcode</th>
-                        <th className="text-left p-3 font-medium min-w-[80px]">HSN</th>
-                        <th className="text-left p-3 font-medium min-w-[80px]">Pieces</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Gross Weight</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Other Weight</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Net Weight</th>
-                        <th className="text-left p-3 font-medium min-w-[80px]">Purity</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Rate On</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Rate /10gm</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Labour On</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Labour Rate</th>
-                        <th className="text-left p-3 font-medium min-w-[80px]">Actions</th>
+                        <th className="text-left p-3 font-medium w-[12%]">Barcode</th>
+                        <th className="text-left p-3 font-medium w-[15%]">Product</th>
+                        <th className="text-left p-3 font-medium w-[10%]">Category</th>
+                        <th className="text-left p-3 font-medium w-[8%]">HSN Number</th>
+                        <th className="text-left p-3 font-medium w-[8%]">Quantity</th>
+                        <th className="text-left p-3 font-medium w-[10%]">Rate</th>
+                        <th className="text-left p-3 font-medium w-[10%]">Subtotal</th>
+                        <th className="text-left p-3 font-medium w-[7%]">GST %</th>
+                        <th className="text-left p-3 font-medium w-[10%]">GST Amount</th>
+                        <th className="text-left p-3 font-medium w-[10%]">Amount</th>
+                        <th className="text-left p-3 font-medium w-[10%]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {invoiceItems.map((item, index) => (
                         <tr key={item.id} className="border-b">
                           <td className="p-3">
-                            <Select value={item.category} onValueChange={(value) => updateItem(item.id, 'category', value)}>
-                              <SelectTrigger className="w-32">
+                            {isLoadingBarcodes ? (
+                              <div className="flex items-center space-x-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span className="text-sm">Loading...</span>
+                              </div>
+                            ) : (
+                              <Select 
+                                value={item.barcode} 
+                                onValueChange={(value) => updateItemCalculations(item.id, 'barcode', value)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select Barcode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {barcodes.map((barcode) => (
+                                    <SelectItem key={barcode.id} value={barcode.barcode}>
+                                      {barcode.barcode}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              value={item.product}
+                              onChange={(e) => updateItemCalculations(item.id, 'product', e.target.value)}
+                              className="w-full"
+                              placeholder="Product Name"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Select value={item.category} onValueChange={(value) => updateItemCalculations(item.id, 'category', value)}>
+                              <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Category" />
                               </SelectTrigger>
                               <SelectContent>
@@ -359,100 +444,62 @@ const SalesInvoice = () => {
                           </td>
                           <td className="p-3">
                             <Input
-                              value={item.barcode}
-                              onChange={(e) => updateItem(item.id, 'barcode', e.target.value)}
-                              className="w-24"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <Input
-                              value={item.hsn}
-                              onChange={(e) => updateItem(item.id, 'hsn', e.target.value)}
-                              className="w-20"
+                              value={item.hsnNumber}
+                              onChange={(e) => updateItemCalculations(item.id, 'hsnNumber', e.target.value)}
+                              className="w-full"
+                              placeholder="HSN"
                             />
                           </td>
                           <td className="p-3">
                             <Input
                               type="number"
-                              value={item.pieces}
-                              onChange={(e) => updateItem(item.id, 'pieces', Number(e.target.value))}
-                              className="w-16"
+                              value={item.quantity}
+                              onChange={(e) => updateItemCalculations(item.id, 'quantity', Number(e.target.value))}
+                              className="w-full"
+                              placeholder="Qty"
                             />
                           </td>
                           <td className="p-3">
                             <Input
                               type="number"
-                              step="0.001"
-                              value={item.grossWeight}
-                              onChange={(e) => updateItem(item.id, 'grossWeight', Number(e.target.value))}
-                              className="w-20"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <Input
-                              type="number"
-                              step="0.001"
-                              value={item.otherWeight}
-                              onChange={(e) => updateItem(item.id, 'otherWeight', Number(e.target.value))}
-                              className="w-20"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <Input
-                              type="number"
-                              step="0.001"
-                              value={item.netWeight}
-                              onChange={(e) => updateItem(item.id, 'netWeight', Number(e.target.value))}
-                              className="w-20"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <Select value={item.purity} onValueChange={(value) => updateItem(item.id, 'purity', value)}>
-                              <SelectTrigger className="w-20">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Net WT">Net WT</SelectItem>
-                                <SelectItem value="Gross WT">Gross WT</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="p-3">
-                            <Select value={item.rateOn} onValueChange={(value) => updateItem(item.id, 'rateOn', value)}>
-                              <SelectTrigger className="w-24">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Gross WT">Gross WT</SelectItem>
-                                <SelectItem value="Net WT">Net WT</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="p-3">
-                            <Input
-                              type="number"
+                              step="0.01"
                               value={item.rate}
-                              onChange={(e) => updateItem(item.id, 'rate', Number(e.target.value))}
-                              className="w-20"
+                              onChange={(e) => updateItemCalculations(item.id, 'rate', Number(e.target.value))}
+                              className="w-full"
+                              placeholder="Rate"
                             />
-                          </td>
-                          <td className="p-3">
-                            <Select value={item.labourOn} onValueChange={(value) => updateItem(item.id, 'labourOn', value)}>
-                              <SelectTrigger className="w-24">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Per Gram">Per Gram</SelectItem>
-                                <SelectItem value="Percentage">Percentage</SelectItem>
-                              </SelectContent>
-                            </Select>
                           </td>
                           <td className="p-3">
                             <Input
                               type="number"
-                              value={item.labourRate}
-                              onChange={(e) => updateItem(item.id, 'labourRate', Number(e.target.value))}
-                              className="w-20"
+                              value={item.subtotal.toFixed(2)}
+                              readOnly
+                              className="w-full bg-muted"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              value={item.gst}
+                              onChange={(e) => updateItemCalculations(item.id, 'gst', Number(e.target.value))}
+                              className="w-full"
+                              placeholder="GST%"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              value={item.gstAmount.toFixed(2)}
+                              readOnly
+                              className="w-full bg-muted"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              value={item.amount.toFixed(2)}
+                              readOnly
+                              className="w-full bg-muted font-medium"
                             />
                           </td>
                           <td className="p-3">
@@ -472,49 +519,6 @@ const SalesInvoice = () => {
                 </div>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Right Column - Totals and Summary */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Calculation Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calculator className="h-5 w-5 mr-2" />
-                  Invoice Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount (₹):</span>
-                    <span className="font-medium">{totals.amount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Labour (₹):</span>
-                    <span className="font-medium">{totals.labour.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Hallmark (₹):</span>
-                    <span className="font-medium">{totals.hallmark.toFixed(2)}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">GST (₹):</span>
-                    <span className="font-medium">{totals.gst.toFixed(2)}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total Amount:</span>
-                    <span>₹{(totals.amount + totals.labour + totals.hallmark + totals.gst).toFixed(2)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-
-          </div>
-        </div>
       </main>
     </div>
   );

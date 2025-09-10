@@ -352,6 +352,17 @@ export interface BarcodeGenerationResponse {
   next_barcode: string;
 }
 
+// Product Barcode types
+export interface ProductBarcode {
+  id: number;
+  barcode: string;
+}
+
+export interface ProductBarcodeListResponse {
+  success: boolean;
+  data: ProductBarcode[];
+}
+
 // API Service class
 class ApiService {
   private getAuthHeaders(): HeadersInit {
@@ -763,6 +774,14 @@ class ApiService {
     return this.request(`/api/product-stocks/generate-barcode/${productId}`, {
       method: 'GET'
     });
+  }
+
+  // Get all product barcodes
+  async getProductBarcodes(): Promise<ApiResponse<ProductBarcodeListResponse>> {
+    return this.request<ProductBarcodeListResponse>(
+      '/api/product-stocks/barcodes',
+      { method: 'GET' }
+    );
   }
 }
 
